@@ -34,7 +34,7 @@ jobs:
         run: npm run type-check
       - name: Build with Next.js
         env:
-          NODE_ENV: production # 明示的に設定
+          NEXT_PUBLIC_BASE_PATH: /nblm-collector # GitHub Pagesのリポジトリ名
         run: npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
