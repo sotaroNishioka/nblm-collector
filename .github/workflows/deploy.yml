@@ -34,12 +34,6 @@ jobs:
         run: npm run type-check
       - name: Build with Next.js
         run: npm run build
-        env:
-          # GitHub Pagesのサブディレクトリ対応のため、環境変数NEXT_PUBLIC_BASE_PATHを設定
-          # next.config.jsのbasePathとassetPrefixがこれを利用するように変更も可能だが、
-          # 今回はnext.config.jsに直接記述しているのでここでは不要。
-          # もしnext.config.jsでprocess.envを参照する場合はここで設定する。
-          # NEXT_PUBLIC_BASE_PATH: /nblm-collector
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
