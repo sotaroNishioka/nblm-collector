@@ -11,3 +11,10 @@ feat(cicd): GitHub ActionsでGitHub Pagesへのデプロイパイプライン構
 - `package.json` に `type-check` スクリプトを追加
 
 Closes #3 
+
+fix(cicd): Remove invalid env block from deploy workflow
+
+The env block under the 'Build with Next.js' step contained only
+comments, causing a YAML parsing error. This block was not needed
+as environment variables for basePath and assetPrefix are handled
+directly in next.config.ts. 
