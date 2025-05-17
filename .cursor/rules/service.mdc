@@ -17,8 +17,7 @@ alwaysApply: true
 
    * ユーザーが「キーワード」「Docbase ドメイン」「Docbase トークン」を入力。
    * **検索リクエスト** `/teams/{domain}/posts?q={keyword}` を実行し、該当メモの *ID / title / draft* を取得。
-   * 取得した **ID リスト** に対して `/teams/{domain}/posts/{id}` を並列 fetch。
-   * 各レスポンスの `body_md` を結合し 1 つの Markdown ファイルへ整形。
+   * レスポンスのオブジェクトメンバ `body` を結合し 1 つの Markdown ファイルへ整形。
 2. **NotebookLM 学習**
 
    * 生成された `.md` を NotebookLM にアップロードし、AI 質問応答のソースにする。
@@ -28,8 +27,6 @@ alwaysApply: true
 ```
 [キーワード & ドメイン & トークン入力]
         ↓ searchDocbase()
-[一覧プレビュー (title のみ)]
-        ↓ fetchDetails() – Promise.all
 [Markdown プレビュー (全文)]
         ↓ [Markdown DL]
 [DL 完了トースト]
@@ -49,14 +46,11 @@ alwaysApply: true
 
 | フェーズ | メソッド & エンドポイント                   | 認証ヘッダー           | パラメータ                             | 目的                                       |
 | ---- | -------------------------------- | ---------------- | --------------------------------- | ---------------------------------------- |
-| 検索   | `GET /teams/{domain}/posts`      | `X-DocBaseToken` | `q` (keyword), `page`, `per_page` | 該当メモの **ID・title** を取得（本文なし）             |
-| 詳細   | `GET /teams/{domain}/posts/{id}` | 同上               | ‒                                 | 各メモの `body_md`, `created_at`, `url` 等を取得 |
-
-* 検索フェーズで得た `posts[].id` を用い、**最大 20 並列** で詳細フェッチ。429 時は指数バックオフで再試行（最大 3 回）。
+| 検索   | `GET /teams/{domain}/posts`      | `X-DocBaseToken` | `q` (keyword), `page`, `per_page` | 該当メモの **ID・title・created_at・url・body** を取得             |
 
 ### 2.2 Markdown 生成
 
-* 投稿ごとに以下のテンプレートで追加。5 MB または 10 000 行を超えた場合は自動でファイルを分割。
+* 投稿ごとに以下のテンプレートで追加。
 
   ````md
   ## {title}
@@ -65,7 +59,7 @@ alwaysApply: true
   > {url}
 
   ```md
-  {body_md}
+  {body}
   ````
 
   ```
@@ -96,8 +90,7 @@ alwaysApply: true
 ```
 ┌───────────── Next.js (React) ─────────────┐
 │  useSearch(keyword, domain, token)       │
-│   ├─ fetchList()  ───────→ posts[]       │
-│   └─ fetchDetails(posts) → Markdown      │
+│   └─ fetchList()  ───────→ Markdown      │
 │        └─ generateBlob() → download()    │
 └──────────────────────────────────────────┘
 ```
@@ -119,15 +112,11 @@ alwaysApply: true
 type DocbasePostListItem = {
   id: number;
   title: string;
-};
-
-type DocbasePostDetail = {
-  id: number;
-  title: string;
-  body_md: string;
+  body: string;
   created_at: string; // ISO-8601
   url: string;
 };
+
 ```
 
 ---
@@ -149,7 +138,6 @@ type DocbasePostDetail = {
 | 操作 | Endpoint                     | ヘッダー             | クエリ                     |
 | -- | ---------------------------- | ---------------- | ----------------------- |
 | 検索 | `/teams/{domain}/posts`      | `X-DocBaseToken` | `q`, `page`, `per_page` |
-| 詳細 | `/teams/{domain}/posts/{id}` | 同上               | ―                       |
 
 #### curl サンプル
 
