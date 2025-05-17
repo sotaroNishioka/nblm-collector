@@ -1,0 +1,9 @@
+feat(setup): Next.js初期セットアップとBiome導入
+
+- create-next-app を使用してNext.jsプロジェクトを初期化
+  - TypeScript, Tailwind CSS, App Router, srcディレクトリ構成
+- Biomeを導入し、フォーマッターとリンターを設定
+  - ESLint関連の設定ファイルは削除
+- src/components ディレクトリを作成
+
+Closes #2 
