@@ -1,42 +1,47 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "vcs": {
-    "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
-  },
-  "files": {
-    "ignoreUnknown": false,
-    "ignore": [".next/", "node_modules/", "out/"]
-  },
-  "formatter": {
-    "enabled": true,
-    "formatWithErrors": false,
-    "indentStyle": "space",
-    "indentWidth": 2,
-    "lineWidth": 80
-  },
+  "$schema": "https://biomejs.dev/schemas/1.5.3/schema.json",
   "organizeImports": {
     "enabled": true
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
-      "suspicious": {
-        "noExplicitAny": "warn"
-      },
-      "style": {
-        "noNonNullAssertion": "warn"
-      }
-    }
+      "recommended": true
+    },
+    "ignore": [
+      ".next/**",
+      "node_modules/**",
+      "public/**",
+      ".github/**",
+      "out/**",
+      "next.config.ts",
+      "postcss.config.mjs",
+      "tailwind.config.ts",
+      "tsconfig.json"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "formatWithErrors": false,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120,
+    "ignore": [
+      ".next/**",
+      "node_modules/**",
+      "public/**",
+      ".github/**",
+      "out/**",
+      "postcss.config.mjs",
+      "tailwind.config.ts",
+      "tsconfig.json"
+    ]
   },
   "javascript": {
     "formatter": {
       "quoteStyle": "single",
       "jsxQuoteStyle": "double",
       "quoteProperties": "asNeeded",
-      "trailingCommas": "all",
       "semicolons": "asNeeded"
     }
   }
