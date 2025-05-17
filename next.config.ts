@@ -1,9 +1,9 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
-const repoName = "nblm-collector"; // リポジトリ名
+const repoName = 'nblm-collector' // リポジトリ名
 
 const nextConfig: NextConfig = {
-  output: "export", // 静的エクスポートを有効化
+  output: 'export', // 静的エクスポートを有効化
   // GitHub Pagesのサブディレクトリ対応
   basePath: `/${repoName}`,
   assetPrefix: `/${repoName}/`,
@@ -12,6 +12,6 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-};
+}
 
-export default nextConfig;
+export default nextConfig
