@@ -3,163 +3,166 @@ description:
 globs: 
 alwaysApply: true
 ---
-# サービス仕様書 v1.7 — Docbase・Slack連携 NotebookLM 用ドキュメント生成アプリ
+# サービス仕様書 v1.9 — Docbase連携 NotebookLM 用ドキュメント生成アプリ
 
-> **最終更新日** 2025‑05‑17   > **作成者** （記入）  > **ドキュメント ID** NB‑MD‑GEN‑001
-
----
-
-## 0. 目的とスコープ
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | Docbase と Slack に点在するナレッジをキーワードで収集し、NotebookLM が参照できる **Markdown ファイル** を生成・ダウンロードする **フロントエンド完結型** Web アプリを提供する |
-| **対象ユーザー** | 社内メンバー（PM・開発者・CS・営業） |
-| **スコープ** | 検索 UI、Docbase & Slack API 直接呼び出し、Markdown 生成、ファイル DL、Token 認証、ブラウザ内ストレージ管理 |
-| **除外範囲** | バックエンド(API サーバー)の構築、要約生成、Google Drive 自動アップロード、オンプレミス環境サポート |
+> **最終更新日** 2025-05-17   > **作成者** （記入）  > **ドキュメント ID** NB-MD-GEN-001
 
 ---
 
 ## 1. ユースケース & UX フロー
 
 ### 1.1 主要ユースケース
-1. **情報収集**: ユーザーが「キーワード」を入力し、Docbase & Slack の該当情報を Markdown に落とし込む。
-2. **NotebookLM 学習**: 生成された `.md` を NotebookLM にアップロードし、AI 質問応答に利用する。
+
+1. **情報収集**
+
+   * ユーザーが「キーワード」「Docbase ドメイン」「Docbase トークン」を入力。
+   * **検索リクエスト** `/teams/{domain}/posts?q={keyword}` を実行し、該当メモの *ID / title / draft* を取得。
+   * 取得した **ID リスト** に対して `/teams/{domain}/posts/{id}` を並列 fetch。
+   * 各レスポンスの `body_md` を結合し 1 つの Markdown ファイルへ整形。
+2. **NotebookLM 学習**
+
+   * 生成された `.md` を NotebookLM にアップロードし、AI 質問応答のソースにする。
 
 ### 1.2 UI ワイヤフロー
+
 ```
-[検索入力] → [検索結果プレビュー] → [Markdown DL] → [DL 完了トースト]
+[キーワード & ドメイン & トークン入力]
+        ↓ searchDocbase()
+[一覧プレビュー (title のみ)]
+        ↓ fetchDetails() – Promise.all
+[Markdown プレビュー (全文)]
+        ↓ [Markdown DL]
+[DL 完了トースト]
 ```
 
 ### 1.3 画面構成（スクリーン）
-| ID | 画面名 | 主なコンポーネント | 機能概要 |
-|----|--------|-------------------|----------|
-| S1 | **検索画面** | `SearchForm`, `SettingButton` | キーワード入力 & 検索実行 |
-| S2 | **結果プレビュー** | `MarkdownPreview` | Docbase / Slack 結果確認 & 出力確認 |
-| S3 | **設定モーダル** | `SettingModal` | Slack トークン入力・Docbase トークン入力・保存/クリア |
 
-> 画面遷移は Next.js App Router を使用。設定モーダルはモーダルレイアウト。
-
-### 1.4 画面要素（ポータル）
-| ID | 要素名 | コンポーネント | 説明 |
-|----|--------|---------------|------|
-| E1 | **完了トースト** | `Toast` | ファイル生成完了を通知 |
-| E2 | **エラーダイアログ** | `ErrorDialog` | API エラー詳細 & 再試行 |
+| ID | 画面名      | 主なコンポーネント                                                                  | 機能概要                          |
+| -- | -------- | -------------------------------------------------------------------------- | ----------------------------- |
+| S1 | **検索画面** | `SearchForm`, `DocbaseDomainInput`, `DocbaseTokenInput`, `MarkdownPreview` | 検索実行・一覧表示・詳細取得・Markdown 生成・DL |
 
 ---
 
 ## 2. 機能要件
 
-### 2.1 データ取得（フロントエンド fetch）
-| ソース | エンドポイント | 認証 | 必須スコープ |
-|--------|---------------|------|--------------|
-| **Docbase** | `GET https://api.docbase.io/teams/{domain}/posts` | `X-DocBaseToken` | `posts:read` |
-| **Slack** | `GET https://slack.com/api/search.messages`<br>`GET https://slack.com/api/conversations.replies` | `Authorization: Bearer <SlackToken>` | `search:read`, `channels:history` |
+### 2.1 データ取得フロー（フロントエンド fetch）
 
-- **Docbase**: 検索ヒットした記事の `body_md` を取得し、そのまま出力。
-- **Slack**: 検索ワードを含むメッセージが存在するスレッドを取得し、スレッド内 **全メッセージ** を出力。
+| フェーズ | メソッド & エンドポイント                   | 認証ヘッダー           | パラメータ                             | 目的                                       |
+| ---- | -------------------------------- | ---------------- | --------------------------------- | ---------------------------------------- |
+| 検索   | `GET /teams/{domain}/posts`      | `X-DocBaseToken` | `q` (keyword), `page`, `per_page` | 該当メモの **ID・title** を取得（本文なし）             |
+| 詳細   | `GET /teams/{domain}/posts/{id}` | 同上               | ‒                                 | 各メモの `body_md`, `created_at`, `url` 等を取得 |
+
+* 検索フェーズで得た `posts[].id` を用い、**最大 20 並列** で詳細フェッチ。429 時は指数バックオフで再試行（最大 3 回）。
 
 ### 2.2 Markdown 生成
-- Docbase セクション / Slack セクションを作成し、取得内容を漏れなく配置。
-- 本文は `> blockquote` または ``` でラップ。
-- 5 MB / 10 000 行超過時は自動分割。
+
+* 投稿ごとに以下のテンプレートで追加。5 MB または 10 000 行を超えた場合は自動でファイルを分割。
+
+  ````md
+  ## {title}
+
+  > {created_at}  
+  > {url}
+
+  ```md
+  {body_md}
+  ````
+
+  ```
+  ```
 
 ### 2.3 ファイルダウンロード
-- Blob → `<a download>` で `nbmd_<keyword>_<timestamp>.md` を保存。
+
+* `Blob` → `<a download>` 方式で `notebooklm_{keyword}_{YYYYMMDDHHmmss}.md` を保存。
+* 分割時は `_1`, `_2` … を末尾に付与。
 
 ### 2.4 トークン管理
-- Slack & Docbase トークンを IndexedDB に AES‑GCM 暗号化保存。
+
+* Docbase **トークン**と**ドメイン**を `localStorage` に平文保存。
+  初回アクセス時のみ入力必須とし、以降は自動補完。
 
 ### 2.5 エラーハンドリング
-| エラー | UI | 再試行 |
-|--------|----|--------|
-| 401 | 再ログインモーダル | ― |
-| 429 | 待機トースト | バックオフ自動再試行 3 回 |
-| fetch error | ネットワークエラー トースト | 手動再試行 |
+
+| エラー         | 表示                             | 再試行                |
+| ----------- | ------------------------------ | ------------------ |
+| 401         | 「トークンが無効です」トースト & トークン再入力ダイアログ | ―                  |
+| 429         | 「Docbase が混み合っています」トースト        | 自動再試行（指数バックオフ 3 回） |
+| fetch error | 「ネットワークに接続できません」トースト           | 手動再試行ボタン           |
 
 ---
 
 ## 3. フロントエンドアーキテクチャ
+
 ```
-┌─────────────── Next.js (React) ───────────────┐
-│  useSearch()                                 │
-│    ├─ fetchDocbase() ──┐                    │
-│    └─ fetchSlack()   ──┤ Promise.all → MD  │
-└────────────────────────┴────────────────────┘
+┌───────────── Next.js (React) ─────────────┐
+│  useSearch(keyword, domain, token)       │
+│   ├─ fetchList()  ───────→ posts[]       │
+│   └─ fetchDetails(posts) → Markdown      │
+│        └─ generateBlob() → download()    │
+└──────────────────────────────────────────┘
 ```
-- データ取得は並列 (`Promise.all`).
 
 ### 3.1 技術スタック
-| レイヤ | 技術 |
-|--------|------|
-| UI | Next.js 15 / React / Tailwind CSS |
-| 状態 | Zustand |
-| データ取得 | fetch / TanStack Query |
-| トークン保存 | IndexedDB + Web Crypto AES‑GCM |
-| Lint/Format | **Biome** |
+
+| レイヤ           | 技術                                |
+| ------------- | --------------------------------- |
+| UI            | Next.js 15 / React / Tailwind CSS |
+| データ取得         | fetch / TanStack Query            |
+| ストレージ         | localStorage                      |
+| Lint / Format | **Biome**                         |
 
 ---
 
-## 4. データモデル (TS)
+## 4. データモデル (TypeScript)
+
 ```ts
-type DocbasePost = {
+type DocbasePostListItem = {
   id: number;
   title: string;
-  body: string; // markdown
-  createdAt: string; // ISO8601
-  url: string;
 };
 
-type SlackMessage = {
-  ts: string;
-  channel: string;
-  user: string;
-  text: string;
-  permalink: string;
-  threadTs?: string;
+type DocbasePostDetail = {
+  id: number;
+  title: string;
+  body_md: string;
+  created_at: string; // ISO-8601
+  url: string;
 };
 ```
 
 ---
 
 ## 5. デプロイ & CI/CD
-1. GitHub Actions: `biome check` → type‑check → `next build && next export`。
-2. **main ブランチへの push をトリガ**に GitHub Actions ワークフローを実行し、生成された `out` ディレクトリを `actions/upload-pages-artifact@v1` でアップロード後、`actions/deploy-pages@v1` で **GitHub Pages** へ公開する（Pages 設定は「Deploy from GitHub Actions」）。
-3. 公開 URL は `https://<org|user>.github.io/<repo>/`。
+
+1. GitHub Actions で `biome check` → `tsc --noEmit` → `next build && next export`。
+2. `main` ブランチ push で `actions/upload-pages-artifact@v1` → `actions/deploy-pages@v1`。
+3. 公開 URL: `https://<org|user>.github.io/<repo>/`。
+
+   * Next.js の `assetPrefix` を Pages パスに合わせること。
 
 ---
 
-## 6. API 利用ガイド API 利用ガイド
+## 6. API 利用ガイド
 
-### 6.1 Slack Web API
-| 操作 | Endpoint | スコープ | 主パラメータ |
-|------|----------|----------|--------------|
-| メッセージ検索 | `search.messages` | `search:read` | `query`, `sort` |
-| スレッド取得 | `conversations.replies` | `channels:history` | `channel`, `ts`, `cursor`, `limit` |
-- 認証: `Authorization: Bearer <SlackToken>`。
-- 検索ヒット後、`channel` & `ts` を用いてスレッド API で全投稿取得。
+### 6.1 Docbase API
 
-#### cURL
+| 操作 | Endpoint                     | ヘッダー             | クエリ                     |
+| -- | ---------------------------- | ---------------- | ----------------------- |
+| 検索 | `/teams/{domain}/posts`      | `X-DocBaseToken` | `q`, `page`, `per_page` |
+| 詳細 | `/teams/{domain}/posts/{id}` | 同上               | ―                       |
+
+#### curl サンプル
+
 ```bash
-curl -G "https://slack.com/api/search.messages" \
-  -H "Authorization: Bearer $SLACK_TOKEN" \
-  --data-urlencode "query=プロジェクトX"
-```
-
-### 6.2 Docbase API
-| 操作 | Endpoint | ヘッダー | クエリ |
-|------|----------|---------|--------|
-| メモ検索 | `/teams/{domain}/posts` | `X-DocBaseToken` | `q`, `page`, `per_page` |
-| 詳細取得 | `/teams/{domain}/posts/{id}` | 同上 | ― |
-- `body_md` が Markdown 本文。
-
-#### cURL
-```bash
+# 検索
 curl -G "https://api.docbase.io/teams/$TEAM/posts" \
-  -H "X-DocBaseToken: $DOCBASE_TOKEN" \
-  --data-urlencode "q=プロジェクトX"
+     -H "X-DocBaseToken: $TOKEN" \
+     --data-urlencode "q=$KEYWORD"
+
+# 詳細
+curl "https://api.docbase.io/teams/$TEAM/posts/$ID" \
+     -H "X-DocBaseToken: $TOKEN"
 ```
 
 ---
 
-this docs from https://chatgpt.com/canvas/shared/68283114c9108191be63768f79cd3c51
