@@ -18,3 +18,10 @@ The env block under the 'Build with Next.js' step contained only
 comments, causing a YAML parsing error. This block was not needed
 as environment variables for basePath and assetPrefix are handled
 directly in next.config.ts. 
+
+fix(format): Apply Biome formatting to next.config.ts
+
+- Use single quotes for imports and string literals.
+- Remove unnecessary trailing semicolons.
+
+This resolves the formatting errors reported by Biome check in the CI pipeline. 
