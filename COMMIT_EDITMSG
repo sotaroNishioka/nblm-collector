@@ -1,9 +1,13 @@
-feat(setup): Next.js初期セットアップとBiome導入
+feat(cicd): GitHub ActionsでGitHub Pagesへのデプロイパイプライン構築
 
-- create-next-app を使用してNext.jsプロジェクトを初期化
-  - TypeScript, Tailwind CSS, App Router, srcディレクトリ構成
-- Biomeを導入し、フォーマッターとリンターを設定
-  - ESLint関連の設定ファイルは削除
-- src/components ディレクトリを作成
+- mainブランチへのpush時および手動実行時にワークフローがトリガーされる
+- Node.jsセットアップ、依存関係インストール
+- Biomeでのリントチェック実行
+- TypeScriptでの型チェック実行
+- Next.jsアプリケーションのビルド (静的エクスポート向け設定)
+- ビルド成果物をアップロードし、GitHub Pagesへデプロイ
 
-Closes #2 
+- `next.config.ts` に `output: 'export'` およびGitHub Pages用 `basePath`, `assetPrefix` を設定
+- `package.json` に `type-check` スクリプトを追加
+
+Closes #3 
